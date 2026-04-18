@@ -84,7 +84,10 @@ class RAGSystem:
         retrieved_images = []
         page_numbers = []
         for idx in top_indices:
-            retrieved_images.append(self.document_images[idx])
+            img = self.document_images[idx].copy()
+            # Downscale resolution to heavily save GPU VRAM for the Generator
+            img.thumbnail((768, 768), Image.Resampling.LANCZOS)
+            retrieved_images.append(img)
             page_numbers.append(idx + 1)
             
         print(f"Retrieved pages: {page_numbers}")
