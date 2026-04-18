@@ -13,7 +13,16 @@ from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
 
 class RAGSystem:
     def __init__(self):
-        self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+        if torch.cuda.is_available():
+            self.device = "cuda"
+            self.dtype = torch.float16 # Safest precision for T4 GPU
+        elif torch.backends.mps.is_available():
+            self.device = "mps"
+            self.dtype = torch.float32
+        else:
+            self.device = "cpu"
+            self.dtype = torch.bfloat16
+            
         print(f"Using device: {self.device}")
         
         # 1. Initialize ColPali for Retrieval
@@ -21,7 +30,7 @@ class RAGSystem:
         print(f"Loading retriever: {self.retriever_name}")
         self.retriever_model = ColPali.from_pretrained(
             self.retriever_name,
-            torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
+            torch_dtype=self.dtype,
             device_map=self.device
         ).eval()
         self.retriever_processor = ColPaliProcessor.from_pretrained(self.retriever_name)
@@ -30,14 +39,12 @@ class RAGSystem:
         self.generator_name = "Qwen/Qwen2-VL-2B-Instruct"
         print(f"Loading generator: {self.generator_name}")
         
-        # Load in float16 for memory efficiency
         self.vlm_model = Qwen2VLForConditionalGeneration.from_pretrained(
             self.generator_name,
-            torch_dtype=torch.float16,
+            torch_dtype=self.dtype,
             device_map=self.device
         ).eval()
         
-        # Use fast processor if available
         self.vlm_processor = AutoProcessor.from_pretrained(self.generator_name)
         
         self.document_embeddings = []
@@ -109,9 +116,8 @@ class RAGSystem:
             return_tensors="pt"
         ).to(self.vlm_model.device)
         
-        # Cast precision for MLX/MPS if needed? Qwen requires float16/bfloat16.
-        # AutoProcessor handles most of it, but need to make sure image tensors match model dtype
-        inputs['pixel_values'] = inputs['pixel_values'].to(torch.float16)
+        if 'pixel_values' in inputs:
+            inputs['pixel_values'] = inputs['pixel_values'].to(self.dtype)
         
         with torch.no_grad():
             generated_ids = self.vlm_model.generate(**inputs, max_new_tokens=256)
