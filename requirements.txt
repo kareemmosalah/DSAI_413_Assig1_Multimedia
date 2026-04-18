@@ -1,0 +1,12 @@
+torch
+torchvision
+transformers>=4.43.0
+accelerate
+pillow
+pdf2image
+streamlit
+pypdf
+qwen-vl-utils
+colpali-engine>=0.2.0
+python-dotenv
+requests
